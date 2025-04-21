@@ -1,0 +1,8 @@
+services:
+  - type: web
+    name: forecast-backend
+    env: python
+    buildCommand: pip install --upgrade pip && pip install cython && pip install -r requirements.txt
+    startCommand: python app.py
+    plan: free
+    region: oregon
