@@ -1,142 +1,170 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>AI Forecast Tool</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Forecasting Tool</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron&family=Roboto&display=swap" rel="stylesheet">
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Roboto', sans-serif;
+      background-color: #0f172a;
+      color: #f1f5f9;
+    }
+    header {
+      text-align: center;
+      padding: 2rem;
+      background: linear-gradient(90deg, #0ea5e9, #3b82f6);
+      font-family: 'Orbitron', sans-serif;
+      font-size: 2rem;
+      color: white;
+    }
+    main {
+      max-width: 700px;
+      margin: 2rem auto;
+      background-color: #1e293b;
+      padding: 2rem;
+      border-radius: 1rem;
+      box-shadow: 0 0 20px #0ea5e9;
+    }
+    input, select, button {
+      width: 100%;
+      margin-top: 1rem;
+      padding: 0.8rem;
+      border-radius: 0.5rem;
+      border: none;
+      font-size: 1rem;
+    }
+    button {
+      background-color: #0ea5e9;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #3b82f6;
+    }
+    .result, .error {
+      margin-top: 2rem;
+      background-color: #334155;
+      padding: 1rem;
+      border-radius: 0.5rem;
+    }
+    canvas {
+      margin-top: 1rem;
+    }
+    .spinner {
+      display: none;
+      text-align: center;
+    }
+  </style>
 </head>
-<body class="bg-gradient-to-r from-gray-900 to-gray-800 text-white min-h-screen">
+<body>
+  <header>
+    AI Forecasting Tool
+  </header>
+  <main>
+    <form id="forecastForm">
+      <label>Upload CSV File:</label>
+      <input type="file" id="fileInput" accept=".csv" required>
 
-  <div class="max-w-3xl mx-auto p-6">
-    <h1 class="text-4xl font-bold text-center text-indigo-400 mb-6">🔮 AI Forecasting Tool</h1>
+      <label for="dateColumn">Select Date Column:</label>
+      <select id="dateColumn"></select>
 
-    <!-- File Upload Section -->
-    <form id="uploadForm" class="bg-gray-800 p-6 rounded-2xl shadow-lg">
-      <label class="block mb-2 text-lg">Upload CSV File:</label>
-      <input type="file" id="csvFile" name="file" accept=".csv" class="w-full mb-4 p-2 text-black bg-white rounded" required />
-      <button type="submit" class="bg-indigo-600 hover:bg-indigo-500 px-4 py-2 rounded text-white w-full font-bold">
-        Upload & Select Columns
-      </button>
+      <label for="valueColumn">Select Value Column:</label>
+      <select id="valueColumn"></select>
+
+      <label for="method">Select Forecast Method:</label>
+      <select id="method">
+        <option value="sma">Simple Moving Average (SMA)</option>
+        <option value="wma">Weighted Moving Average (WMA)</option>
+      </select>
+
+      <label for="period">Forecast Period:</label>
+      <input type="number" id="period" value="3" min="1">
+
+      <button type="submit">Run Forecast</button>
     </form>
 
-    <!-- Column Selection Section -->
-    <form id="columnForm" class="bg-gray-800 p-6 mt-6 rounded-2xl shadow-lg hidden">
-      <label class="block mb-2 text-lg">Select Date Column:</label>
-      <select id="dateColumn" class="w-full mb-4 p-2 text-black rounded"></select>
-
-      <label class="block mb-2 text-lg">Select Value Column:</label>
-      <select id="valueColumn" class="w-full mb-4 p-2 text-black rounded"></select>
-
-      <button type="submit" class="bg-indigo-600 hover:bg-indigo-500 px-4 py-2 rounded text-white w-full font-bold">
-        Run Forecast 🔍
-      </button>
-    </form>
-
-    <!-- Results -->
-    <div id="output" class="mt-6 bg-gray-900 p-4 rounded-2xl shadow">
-      <h2 class="text-2xl font-semibold mb-4">📈 Forecast Result:</h2>
-      <pre id="jsonOutput" class="bg-gray-700 text-green-300 p-4 rounded overflow-x-auto max-h-60"></pre>
-      <canvas id="forecastChart" class="mt-6"></canvas>
+    <div class="spinner" id="spinner">
+      <i class="fas fa-circle-notch fa-spin fa-2x"></i>
+      <p>Running forecast...</p>
     </div>
-  </div>
 
+    <div class="error" id="error"></div>
+    <div class="result" id="result"></div>
+    <canvas id="forecastChart"></canvas>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script>
-    let selectedFile = null;
-    let csvHeaders = [];
+    const fileInput = document.getElementById('fileInput');
+    const dateColumn = document.getElementById('dateColumn');
+    const valueColumn = document.getElementById('valueColumn');
+    const result = document.getElementById('result');
+    const spinner = document.getElementById('spinner');
+    const errorDiv = document.getElementById('error');
 
-    document.getElementById("uploadForm").addEventListener("submit", function (e) {
-      e.preventDefault();
-      const fileInput = document.getElementById("csvFile");
-      const file = fileInput.files[0];
-      if (!file) return alert("Please upload a file.");
+    fileInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
 
-      selectedFile = file;
-      const reader = new FileReader();
-      reader.onload = function (event) {
-        const lines = event.target.result.split("\n");
-        const headers = lines[0].split(",");
-        csvHeaders = headers.map(h => h.trim());
+      const text = await file.text();
+      const firstLine = text.split('\n')[0];
+      const headers = firstLine.split(',');
 
-        // Fill dropdowns
-        const dateSelect = document.getElementById("dateColumn");
-        const valueSelect = document.getElementById("valueColumn");
-        dateSelect.innerHTML = "";
-        valueSelect.innerHTML = "";
-
-        csvHeaders.forEach(col => {
-          const opt1 = document.createElement("option");
-          opt1.value = opt1.text = col;
-          dateSelect.appendChild(opt1);
-
-          const opt2 = document.createElement("option");
-          opt2.value = opt2.text = col;
-          valueSelect.appendChild(opt2);
-        });
-
-        document.getElementById("columnForm").classList.remove("hidden");
-      };
-      reader.readAsText(file);
+      dateColumn.innerHTML = headers.map(h => `<option value="${h}">${h}</option>`).join('');
+      valueColumn.innerHTML = headers.map(h => `<option value="${h}">${h}</option>`).join('');
     });
 
-    document.getElementById("columnForm").addEventListener("submit", async function (e) {
+    document.getElementById('forecastForm').addEventListener('submit', async function(e) {
       e.preventDefault();
 
-      const dateColumn = document.getElementById("dateColumn").value;
-      const valueColumn = document.getElementById("valueColumn").value;
-
-      if (!selectedFile || !dateColumn || !valueColumn) {
-        alert("Please make sure file and columns are selected.");
-        return;
-      }
-
+      const file = fileInput.files[0];
       const formData = new FormData();
-      formData.append("file", selectedFile);
-      formData.append("date_col", dateColumn);
-      formData.append("value_col", valueColumn);
+      formData.append('file', file);
+      formData.append('date_col', dateColumn.value);
+      formData.append('value_col', valueColumn.value);
+      formData.append('method', document.getElementById('method').value);
+      formData.append('period', document.getElementById('period').value);
+
+      spinner.style.display = 'block';
+      result.innerHTML = '';
+      errorDiv.innerHTML = '';
 
       try {
-        const response = await fetch("https://forecasting-backend-f5v5.onrender.com/", {
-          method: "POST",
+        const res = await fetch('/forecast', {
+          method: 'POST',
           body: formData
         });
+        const data = await res.json();
 
-        if (!response.ok) throw new Error("Forecast failed");
+        if (data.error) throw new Error(data.error);
 
-        const result = await response.json();
-        document.getElementById("jsonOutput").textContent = JSON.stringify(result, null, 2);
+        result.innerHTML = '<h3>Last 10 Forecasts:</h3>' + data.map(r => `<div>${r.Date}: ${r.Forecast.toFixed(2)}</div>`).join('');
 
-        // Chart display
-        const labels = result.map(item => item.Date);
-        const data = result.map(item => item.Forecast);
-
-        const ctx = document.getElementById("forecastChart").getContext("2d");
+        const ctx = document.getElementById('forecastChart').getContext('2d');
         new Chart(ctx, {
           type: 'line',
           data: {
-            labels: labels,
-            datasets: [{
-              label: 'Forecast',
-              data: data,
-              borderColor: 'rgb(99, 102, 241)',
-              backgroundColor: 'rgba(99, 102, 241, 0.2)',
-              tension: 0.3,
-              pointRadius: 3,
-              fill: true
-            }]
-          },
-          options: {
-            responsive: true,
-            scales: {
-              x: { title: { display: true, text: 'Date' } },
-              y: { title: { display: true, text: 'Forecast Value' } }
-            }
+            labels: data.map(d => d.Date),
+            datasets: [
+              {
+                label: 'Forecast',
+                data: data.map(d => d.Forecast),
+                fill: false,
+                borderColor: '#0ea5e9',
+                tension: 0.1
+              }
+            ]
           }
         });
-
       } catch (err) {
-        alert("An error occurred: " + err.message);
+        errorDiv.innerHTML = 'An error occurred: ' + err.message;
+      } finally {
+        spinner.style.display = 'none';
       }
     });
   </script>
