@@ -1,6 +1,6 @@
-from flask import Flask, request, render_template, jsonify
 import pandas as pd
-from forecast_logic import run_forecast  # this matches your function
+from flask import Flask, request, render_template, jsonify
+from forecast_logic import run_forecast
 
 app = Flask(__name__)
 
@@ -8,28 +8,41 @@ app = Flask(__name__)
 def index():
     return render_template('index.html')
 
-@app.route('/forecast', methods=['POST'])
-def forecast():
+@app.route('/upload', methods=['POST'])
+def upload():
     if 'file' not in request.files:
-        return "No file uploaded", 400
-    
+        return "No file part", 400
+
     file = request.files['file']
-    
     if file.filename == '':
-        return "Empty file name", 400
+        return "No selected file", 400
 
     try:
         df = pd.read_csv(file)
+        columns = df.columns.tolist()
+        # Save to global storage for later use (or session)
+        df.to_csv('temp_uploaded.csv', index=False)
+        return jsonify({'columns': columns})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
-        # You might want to get method and period from form data or set defaults
-        method = request.form.get('method', 'sma')  # default to sma
-        period = int(request.form.get('period', 3))  # default to 3
+@app.route('/forecast', methods=['POST'])
+def forecast():
+    try:
+        data = request.get_json()
+        date_col = data['date_column']
+        value_col = data['value_column']
+        method = data.get('method', 'sma')
+        period = int(data.get('period', 3))
+
+        df = pd.read_csv('temp_uploaded.csv')
+        df = df[[date_col, value_col]]
+        df.columns = ['Date', 'Value']
 
         result = run_forecast(df, method, period)
         return jsonify(result)
-
     except Exception as e:
-        return f"An error occurred: {str(e)}", 500
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=10000)
+    app.run(debug=True)
