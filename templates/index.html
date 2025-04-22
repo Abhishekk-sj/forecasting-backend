@@ -2,196 +2,105 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>AI Forecasting Tool</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Forecasting App</title>
     <style>
-        body {
-            font-family: 'Segoe UI', sans-serif;
-            background: #0d1117;
-            color: #c9d1d9;
-            padding: 20px;
-        }
-        .container {
-            max-width: 800px;
-            margin: auto;
-            background: #161b22;
-            padding: 30px;
-            border-radius: 12px;
-            box-shadow: 0 0 20px #58a6ff33;
-        }
-        h1 {
-            text-align: center;
-            margin-bottom: 20px;
-            color: #58a6ff;
-        }
-        label {
-            margin-top: 15px;
-            display: block;
-        }
-        input, select, button {
-            width: 100%;
-            padding: 10px;
-            margin-top: 5px;
-            border-radius: 8px;
-            border: none;
-        }
-        button {
-            background: #238636;
-            color: white;
-            font-weight: bold;
-            cursor: pointer;
-            margin-top: 20px;
-        }
-        button:hover {
-            background: #2ea043;
-        }
-        #forecast-chart {
-            margin-top: 40px;
-        }
-        .hidden {
-            display: none;
-        }
-        .error {
-            color: #ff6b6b;
-            margin-top: 10px;
-        }
-        .loader {
-            color: #58a6ff;
-            text-align: center;
-        }
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        h1 { text-align: center; }
+        .container { max-width: 600px; margin: 0 auto; }
+        label, select, input { width: 100%; margin: 10px 0; }
+        button { width: 100%; padding: 10px; background-color: #4CAF50; color: white; border: none; cursor: pointer; }
+        button:hover { background-color: #45a049; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
     </style>
 </head>
 <body>
-<div class="container">
-    <h1>🧠 AI Forecasting Tool</h1>
-    <form id="forecast-form">
-        <label for="file">Upload CSV File:</label>
-        <input type="file" id="file" name="file" required accept=".csv">
 
-        <div id="column-selects" class="hidden">
-            <label for="date_col">Select Date Column:</label>
-            <select id="date_col" name="date_col" required></select>
+    <div class="container">
+        <h1>Forecasting App</h1>
 
-            <label for="value_col">Select Value Column:</label>
-            <select id="value_col" name="value_col" required></select>
+        <!-- File Upload Form -->
+        <form id="upload-form" enctype="multipart/form-data">
+            <label for="file">Upload CSV File</label>
+            <input type="file" id="file" name="file" required>
 
-            <label for="method">Select Forecast Method:</label>
-            <select id="method" name="method">
+            <label for="date-column">Select Date Column</label>
+            <input type="text" id="date-column" name="date_col" required>
+
+            <label for="value-column">Select Value Column</label>
+            <input type="text" id="value-column" name="value_col" required>
+
+            <label for="forecast-frequency">Select Frequency</label>
+            <select id="forecast-frequency" name="frequency">
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+                <option value="quarterly">Quarterly</option>
+                <option value="yearly">Yearly</option>
+            </select>
+
+            <label for="forecast-period">Select Period</label>
+            <input type="number" id="forecast-period" name="period" placeholder="Enter forecast period" required>
+
+            <label for="forecast-method">Select Forecast Method</label>
+            <select id="forecast-method" name="method">
                 <option value="sma">Simple Moving Average</option>
                 <option value="wma">Weighted Moving Average</option>
             </select>
 
-            <label for="period">Forecast Period (e.g., 3):</label>
-            <input type="number" id="period" name="period" min="1" value="3">
+            <button type="button" id="generate-forecast">Generate Forecast</button>
+        </form>
 
-            <button type="submit">Generate Forecast</button>
+        <!-- Forecast Results Table -->
+        <div id="forecast-results">
+            <h3>Forecast Results</h3>
+            <table id="forecast-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Forecast</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Forecast results will be populated here -->
+                </tbody>
+            </table>
         </div>
+    </div>
 
-        <p id="status" class="loader hidden">Fetching data...</p>
-        <p class="error" id="error-msg"></p>
-    </form>
+    <script>
+        document.getElementById('generate-forecast').addEventListener('click', function() {
+            const formData = new FormData();
+            formData.append('file', document.getElementById('file').files[0]);
+            formData.append('date_col', document.getElementById('date-column').value);
+            formData.append('value_col', document.getElementById('value-column').value);
+            formData.append('frequency', document.getElementById('forecast-frequency').value);
+            formData.append('period', document.getElementById('forecast-period').value);
+            formData.append('method', document.getElementById('forecast-method').value);
 
-    <canvas id="forecast-chart" class="hidden"></canvas>
-</div>
-
-<script>
-    let csvHeaders = [];
-
-    document.getElementById('file').addEventListener('change', function () {
-        const file = this.files[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = function (e) {
-            const text = e.target.result;
-            const rows = text.trim().split('\n');
-            csvHeaders = rows[0].split(',');
-
-            const dateSelect = document.getElementById('date_col');
-            const valueSelect = document.getElementById('value_col');
-            dateSelect.innerHTML = '';
-            valueSelect.innerHTML = '';
-            csvHeaders.forEach(col => {
-                dateSelect.innerHTML += `<option value="${col}">${col}</option>`;
-                valueSelect.innerHTML += `<option value="${col}">${col}</option>`;
-            });
-
-            document.getElementById('column-selects').classList.remove('hidden');
-            document.getElementById('error-msg').textContent = '';
-        };
-        reader.readAsText(file);
-    });
-
-    $('#forecast-form').on('submit', function (e) {
-        e.preventDefault();
-
-        const file = $('#file')[0].files[0];
-        if (!file) return;
-
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('date_col', $('#date_col').val());
-        formData.append('value_col', $('#value_col').val());
-        formData.append('method', $('#method').val());
-        formData.append('period', $('#period').val());
-
-        $('#status').removeClass('hidden');
-        $('#error-msg').text('');
-        $('#forecast-chart').addClass('hidden');
-
-        $.ajax({
-            url: '/forecast',
-            method: 'POST',
-            data: formData,
-            processData: false,
-            contentType: false,
-            success: function (res) {
-                $('#status').addClass('hidden');
-                renderChart(res.forecast);
-            },
-            error: function (xhr) {
-                $('#status').addClass('hidden');
-                $('#error-msg').text(xhr.responseJSON?.error || 'Something went wrong!');
-            }
-        });
-    });
-
-    let chart;
-    function renderChart(data) {
-        const labels = data.map(row => row.Date);
-        const values = data.map(row => row.Forecast);
-
-        const ctx = document.getElementById('forecast-chart').getContext('2d');
-        if (chart) chart.destroy();
-
-        chart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels,
-                datasets: [{
-                    label: 'Forecasted Value',
-                    data: values,
-                    borderColor: '#58a6ff',
-                    backgroundColor: 'rgba(88,166,255,0.2)',
-                    tension: 0.3,
-                    fill: true,
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: { labels: { color: '#c9d1d9' } },
-                },
-                scales: {
-                    x: { ticks: { color: '#c9d1d9' } },
-                    y: { ticks: { color: '#c9d1d9' } },
+            fetch('/forecast', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.forecast) {
+                    const tbody = document.getElementById('forecast-table').getElementsByTagName('tbody')[0];
+                    tbody.innerHTML = ''; // Clear any previous results
+                    data.forecast.forEach(forecast => {
+                        const row = tbody.insertRow();
+                        const dateCell = row.insertCell(0);
+                        const forecastCell = row.insertCell(1);
+                        dateCell.textContent = forecast.Date;
+                        forecastCell.textContent = forecast.Forecast;
+                    });
+                } else {
+                    alert('Error: ' + data.error);
                 }
-            }
+            })
+            .catch(error => console.error('Error:', error));
         });
+    </script>
 
-        $('#forecast-chart').removeClass('hidden');
-    }
-</script>
 </body>
 </html>
