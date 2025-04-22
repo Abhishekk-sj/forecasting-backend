@@ -1,71 +1,132 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Forecasting App</title>
-</head>
-<body>
-  <h1>Upload CSV</h1>
-  <input type="file" id="csvFile">
-  <button onclick="uploadCSV()">Upload</button>
 
-  <div id="columnSelectors" style="display:none;">
-    <h2>Select Columns</h2>
-    Date: <select id="dateColumn"></select><br>
-    Value: <select id="valueColumn"></select><br>
-    <button onclick="submitColumns()">Run Forecast</button>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Forecasting Tool</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    .glass {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      border-radius: 1rem;
+      padding: 2rem;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+  </style>
+</head>
+
+<body class="text-white min-h-screen flex flex-col items-center justify-start p-6">
+  <header class="w-full text-center mb-8">
+    <h1 class="text-4xl font-bold bg-gradient-to-r from-purple-400 via-pink-500 to-red-500 bg-clip-text text-transparent">
+      🤖 AI Forecasting Tool
+    </h1>
+    <p class="text-sm text-gray-300 mt-2">Upload your data and let the AI help you forecast!</p>
+  </header>
+
+  <form id="upload-form" class="glass max-w-xl w-full" enctype="multipart/form-data">
+    <label class="block mb-2 text-lg font-semibold">Upload CSV File</label>
+    <input type="file" name="file" id="file" accept=".csv" class="w-full p-2 rounded bg-white text-black mb-4" required />
+
+    <div id="column-selection" class="hidden">
+      <label class="block mb-2 text-lg font-semibold">Select Date Column</label>
+      <select id="date-column" name="date-column" class="w-full p-2 rounded bg-white text-black mb-4"></select>
+
+      <label class="block mb-2 text-lg font-semibold">Select Value Column</label>
+      <select id="value-column" name="value-column" class="w-full p-2 rounded bg-white text-black mb-4"></select>
+    </div>
+
+    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded w-full transition-all">
+      Forecast
+    </button>
+  </form>
+
+  <div id="result" class="glass max-w-xl w-full mt-8 hidden">
+    <h2 class="text-2xl font-bold mb-4">📈 Forecast Result</h2>
+    <canvas id="forecast-chart"></canvas>
+    <pre id="forecast-data" class="mt-4 text-sm whitespace-pre-wrap"></pre>
   </div>
 
-  <h2>Forecast Result</h2>
-  <pre id="output"></pre>
-
   <script>
-    function uploadCSV() {
-      const fileInput = document.getElementById('csvFile');
+    document.getElementById('file').addEventListener('change', function (e) {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = function (event) {
+          const text = event.target.result;
+          const lines = text.split('\n');
+          const headers = lines[0].split(',');
+          const dateSelect = document.getElementById('date-column');
+          const valueSelect = document.getElementById('value-column');
+
+          dateSelect.innerHTML = '';
+          valueSelect.innerHTML = '';
+          headers.forEach(h => {
+            const opt = new Option(h, h);
+            dateSelect.appendChild(opt.cloneNode(true));
+            valueSelect.appendChild(opt);
+          });
+
+          document.getElementById('column-selection').classList.remove('hidden');
+        };
+        reader.readAsText(file);
+      }
+    });
+
+    document.getElementById('upload-form').addEventListener('submit', async function (e) {
+      e.preventDefault();
+
+      const file = document.getElementById('file').files[0];
+      const dateCol = document.getElementById('date-column').value;
+      const valueCol = document.getElementById('value-column').value;
       const formData = new FormData();
-      formData.append('file', fileInput.files[0]);
+      formData.append('file', file);
+      formData.append('date_column', dateCol);
+      formData.append('value_column', valueCol);
 
-      fetch('/upload', {
-        method: 'POST',
-        body: formData
-      })
-      .then(res => res.json())
-      .then(data => {
-        if (data.error) {
-          alert(data.error);
-          return;
+      const res = await fetch('/forecast', { method: 'POST', body: formData });
+      const data = await res.json();
+
+      const ctx = document.getElementById('forecast-chart').getContext('2d');
+      const labels = data.map(row => row.Date);
+      const values = data.map(row => row.Forecast);
+
+      new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Forecast',
+            data: values,
+            borderColor: '#60a5fa',
+            backgroundColor: 'rgba(96, 165, 250, 0.1)',
+            borderWidth: 2,
+            tension: 0.4,
+            fill: true
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { labels: { color: 'white' } }
+          },
+          scales: {
+            x: { ticks: { color: 'white' } },
+            y: { ticks: { color: 'white' } }
+          }
         }
-
-        const columns = data.columns;
-        const dateSelect = document.getElementById('dateColumn');
-        const valueSelect = document.getElementById('valueColumn');
-
-        dateSelect.innerHTML = '';
-        valueSelect.innerHTML = '';
-
-        columns.forEach(col => {
-          dateSelect.innerHTML += `<option value="${col}">${col}</option>`;
-          valueSelect.innerHTML += `<option value="${col}">${col}</option>`;
-        });
-
-        document.getElementById('columnSelectors').style.display = 'block';
       });
-    }
 
-    function submitColumns() {
-      const dateCol = document.getElementById('dateColumn').value;
-      const valueCol = document.getElementById('valueColumn').value;
-
-      fetch('/forecast', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ date_column: dateCol, value_column: valueCol })
-      })
-      .then(res => res.json())
-      .then(data => {
-        document.getElementById('output').innerText = JSON.stringify(data, null, 2);
-      });
-    }
+      document.getElementById('forecast-data').textContent = JSON.stringify(data, null, 2);
+      document.getElementById('result').classList.remove('hidden');
+    });
   </script>
 </body>
+
 </html>
