@@ -1,13 +1,71 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Forecast Upload</title>
+  <meta charset="UTF-8">
+  <title>Forecasting App</title>
 </head>
 <body>
-  <h1>Upload CSV for Forecasting</h1>
-  <form action="/forecast" method="post" enctype="multipart/form-data">
-    <input type="file" name="file" accept=".csv" required />
-    <button type="submit">Submit</button>
-  </form>
+  <h1>Upload CSV</h1>
+  <input type="file" id="csvFile">
+  <button onclick="uploadCSV()">Upload</button>
+
+  <div id="columnSelectors" style="display:none;">
+    <h2>Select Columns</h2>
+    Date: <select id="dateColumn"></select><br>
+    Value: <select id="valueColumn"></select><br>
+    <button onclick="submitColumns()">Run Forecast</button>
+  </div>
+
+  <h2>Forecast Result</h2>
+  <pre id="output"></pre>
+
+  <script>
+    function uploadCSV() {
+      const fileInput = document.getElementById('csvFile');
+      const formData = new FormData();
+      formData.append('file', fileInput.files[0]);
+
+      fetch('/upload', {
+        method: 'POST',
+        body: formData
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.error) {
+          alert(data.error);
+          return;
+        }
+
+        const columns = data.columns;
+        const dateSelect = document.getElementById('dateColumn');
+        const valueSelect = document.getElementById('valueColumn');
+
+        dateSelect.innerHTML = '';
+        valueSelect.innerHTML = '';
+
+        columns.forEach(col => {
+          dateSelect.innerHTML += `<option value="${col}">${col}</option>`;
+          valueSelect.innerHTML += `<option value="${col}">${col}</option>`;
+        });
+
+        document.getElementById('columnSelectors').style.display = 'block';
+      });
+    }
+
+    function submitColumns() {
+      const dateCol = document.getElementById('dateColumn').value;
+      const valueCol = document.getElementById('valueColumn').value;
+
+      fetch('/forecast', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ date_column: dateCol, value_column: valueCol })
+      })
+      .then(res => res.json())
+      .then(data => {
+        document.getElementById('output').innerText = JSON.stringify(data, null, 2);
+      });
+    }
+  </script>
 </body>
 </html>
