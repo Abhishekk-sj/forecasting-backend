@@ -1,31 +1,5 @@
 # Inside forecast_logic.py
 
-import pandas as pd
-
-def aggregate_data(df, frequency):
-    # Convert the Date column to datetime format
-    df['Date'] = pd.to_datetime(df['Date'])
-    
-    # Aggregate data by frequency (weekly, monthly, etc.)
-    if frequency == 'weekly':
-        df.set_index('Date', inplace=True)
-        df = df.resample('W').sum().reset_index()
-    elif frequency == 'monthly':
-        df.set_index('Date', inplace=True)
-        df = df.resample('M').sum().reset_index()
-    elif frequency == 'quarterly':
-        df.set_index('Date', inplace=True)
-        df = df.resample('Q').sum().reset_index()
-    elif frequency == 'yearly':
-        df.set_index('Date', inplace=True)
-        df = df.resample('Y').sum().reset_index()
-    else:
-        # Default is daily if no frequency is selected
-        df['Date'] = pd.to_datetime(df['Date']).dt.date
-    
-    return df
-# Inside forecast_logic.py
-
 def run_forecast(df, method, period, frequency):
     # Aggregate data based on frequency
     df = aggregate_data(df, frequency)
