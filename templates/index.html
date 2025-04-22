@@ -3,101 +3,144 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Forecasting</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        .spinner-border {
-            display: none;
-        }
-        .error {
-            color: red;
-        }
-    </style>
+    <title>AI Forecasting Tool</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chart.js">
 </head>
 <body>
-    <div class="container">
-        <h2 class="mt-5">AI Forecasting Tool</h2>
-        <form id="forecastForm" enctype="multipart/form-data">
-            <div class="mb-3">
-                <label for="file" class="form-label">Upload CSV</label>
+    <div class="container mt-5">
+        <h1 class="text-center">AI Forecasting Tool</h1>
+        
+        <form id="upload-form" enctype="multipart/form-data">
+            <div class="form-group">
+                <label for="file">Upload CSV</label>
                 <input type="file" class="form-control" id="file" name="file" required>
             </div>
-            <div class="mb-3">
-                <label for="date_col" class="form-label">Select Date Column</label>
-                <select class="form-select" id="date_col" name="date_col" required>
-                    <!-- Dynamic options will be populated after file upload -->
+
+            <div class="form-group">
+                <label for="date_col">Select Date Column</label>
+                <select class="form-control" id="date_col" required>
+                    <!-- Options will be populated after file upload -->
                 </select>
             </div>
-            <div class="mb-3">
-                <label for="value_col" class="form-label">Select Value Column</label>
-                <select class="form-select" id="value_col" name="value_col" required>
-                    <!-- Dynamic options will be populated after file upload -->
+
+            <div class="form-group">
+                <label for="value_col">Select Value Column</label>
+                <select class="form-control" id="value_col" required>
+                    <!-- Options will be populated after file upload -->
                 </select>
             </div>
-            <div class="mb-3">
-                <label for="method" class="form-label">Select Forecast Method</label>
-                <select class="form-select" id="method" name="method" required>
+
+            <div class="form-group">
+                <label for="method">Select Forecasting Method</label>
+                <select class="form-control" id="method" required>
                     <option value="sma">Simple Moving Average (SMA)</option>
                     <option value="wma">Weighted Moving Average (WMA)</option>
                 </select>
             </div>
-            <div class="mb-3">
-                <label for="period" class="form-label">Select Aggregation Period</label>
-                <select class="form-select" id="period" name="period" required>
-                    <option value="weekly">Weekly</option>
-                    <option value="monthly">Monthly</option>
-                    <option value="quarterly">Quarterly</option>
-                    <option value="yearly">Yearly</option>
+
+            <div class="form-group">
+                <label for="period">Select Forecast Period</label>
+                <input type="number" class="form-control" id="period" min="1" required>
+            </div>
+
+            <div class="form-group">
+                <label for="frequency">Select Forecast Frequency</label>
+                <select class="form-control" id="frequency" required>
+                    <option value="W">Weekly</option>
+                    <option value="M">Monthly</option>
+                    <option value="Q">Quarterly</option>
+                    <option value="Y">Yearly</option>
                 </select>
             </div>
-            <div class="mb-3">
-                <label for="forecast_period" class="form-label">Select Forecast Period (e.g., 8 weeks)</label>
-                <input type="number" class="form-control" id="forecast_period" name="forecast_period" required min="1">
-            </div>
-            <button type="submit" class="btn btn-primary">Generate Forecast</button>
+
+            <button type="submit" class="btn btn-primary btn-block">Generate Forecast</button>
         </form>
 
-        <div class="spinner-border text-primary mt-3" role="status">
-            <span class="visually-hidden">Loading...</span>
+        <div id="forecast-results" class="mt-5" style="display:none;">
+            <h3>Forecast Results</h3>
+            <table id="forecast-table" class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Forecast</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+            <button id="download" class="btn btn-success">Download Forecast as CSV</button>
         </div>
-
-        <div id="forecastResult" class="mt-4"></div>
-
     </div>
 
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/4.5.2/js/bootstrap.bundle.min.js"></script>
     <script>
-        document.getElementById('forecastForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            let formData = new FormData(this);
-            let spinner = document.querySelector('.spinner-border');
-            let resultDiv = document.getElementById('forecastResult');
-            spinner.style.display = 'block';
-            resultDiv.innerHTML = '';
+        let globalCsvData = null;  // To store CSV data
 
-            fetch('/forecast', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                spinner.style.display = 'none';
-                if (data.error) {
-                    resultDiv.innerHTML = `<p class="error">${data.error}</p>`;
-                } else {
-                    // Display forecast data as table
-                    let forecastData = data.forecast;
-                    let table = '<table class="table"><thead><tr><th>Date</th><th>Forecast</th></tr></thead><tbody>';
-                    forecastData.forEach(row => {
-                        table += `<tr><td>${row.Date}</td><td>${row.Forecast}</td></tr>`;
+        // Handle file upload and populate dropdowns
+        $('#file').change(function (e) {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const data = event.target.result;
+                globalCsvData = data;
+
+                // Parse CSV
+                const rows = data.split('\n');
+                const header = rows[0].split(',');
+
+                // Populate dropdowns
+                const dateSelect = $('#date_col');
+                const valueSelect = $('#value_col');
+                dateSelect.empty();
+                valueSelect.empty();
+                header.forEach(col => {
+                    dateSelect.append(`<option value="${col}">${col}</option>`);
+                    valueSelect.append(`<option value="${col}">${col}</option>`);
+                });
+            };
+            reader.readAsText(file);
+        });
+
+        // Handle form submission
+        $('#upload-form').submit(function (e) {
+            e.preventDefault();
+            const formData = new FormData();
+            formData.append('file', $('#file')[0].files[0]);
+            formData.append('date_col', $('#date_col').val());
+            formData.append('value_col', $('#value_col').val());
+            formData.append('method', $('#method').val());
+            formData.append('period', $('#period').val());
+            formData.append('frequency', $('#frequency').val());
+
+            $.ajax({
+                url: '/forecast',
+                type: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                success: function(response) {
+                    const forecastData = response.forecast;
+                    let tableContent = '';
+                    forecastData.forEach(item => {
+                        tableContent += `<tr><td>${item.Date}</td><td>${item.Forecast}</td></tr>`;
                     });
-                    table += '</tbody></table>';
-                    resultDiv.innerHTML = table;
+                    $('#forecast-table tbody').html(tableContent);
+                    $('#forecast-results').show();
+                    
+                    // Enable CSV download
+                    $('#download').click(function () {
+                        const csvContent = "Date,Forecast\n" + forecastData.map(item => `${item.Date},${item.Forecast}`).join('\n');
+                        const blob = new Blob([csvContent], { type: 'text/csv' });
+                        const link = document.createElement('a');
+                        link.href = URL.createObjectURL(blob);
+                        link.download = 'forecast.csv';
+                        link.click();
+                    });
+                },
+                error: function(error) {
+                    alert('Error: ' + error.responseText);
                 }
-            })
-            .catch(error => {
-                spinner.style.display = 'none';
-                resultDiv.innerHTML = `<p class="error">Something went wrong: ${error}</p>`;
             });
         });
     </script>
