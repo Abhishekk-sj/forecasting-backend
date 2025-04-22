@@ -4,7 +4,6 @@ def run_forecast(df, method, period):
     if df.empty or df.shape[1] < 2:
         raise ValueError("Data must have at least two columns")
 
-    df.columns = ['Date', 'Value']
     df['Date'] = pd.to_datetime(df['Date'])
     df = df.sort_values('Date')
 
@@ -22,8 +21,3 @@ def run_forecast(df, method, period):
     df = df.dropna()
     forecast_list = df[['Date', 'Forecast']].tail(10).to_dict(orient='records')
     return forecast_list
-
-# 👇 Add this function below the run_forecast function
-def forecast_from_uploaded_file(file):
-    df = pd.read_csv(file)
-    return run_forecast(df, method='sma', period=3)  # or 'wma', change period as needed
