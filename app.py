@@ -18,19 +18,22 @@ def forecast():
         return jsonify({'error': 'Empty file name'}), 400
 
     try:
-        # Get parameters from the form
+        # Get parameters from the frontend
         date_col = request.form.get('date_col')
         value_col = request.form.get('value_col')
         method = request.form.get('method')
         period = int(request.form.get('period'))
 
-        # Read CSV file
+        # Load and prepare the dataframe
         df = pd.read_csv(file)
 
-        # Rename the selected columns
+        if date_col not in df.columns or value_col not in df.columns:
+            return jsonify({'error': 'Selected columns not found in the uploaded file'}), 400
+
         df = df[[date_col, value_col]]
         df.columns = ['Date', 'Value']
 
+        # Run forecasting logic
         result = run_forecast(df, method=method, period=period)
         return jsonify({'forecast': result})
 
