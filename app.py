@@ -1,5 +1,5 @@
 from flask import Flask, request, render_template, jsonify
-from forecast_logic import forecast_from_uploaded_file  # assuming this function exists
+from forecast_logic import run_forecast # assuming this function exists
 
 app = Flask(__name__)
 
