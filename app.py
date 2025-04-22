@@ -1,5 +1,6 @@
 from flask import Flask, request, render_template, jsonify
-from forecast_logic import run_forecast # assuming this function exists
+import pandas as pd
+from forecast_logic import run_forecast  # this matches your function
 
 app = Flask(__name__)
 
@@ -17,8 +18,18 @@ def forecast():
     if file.filename == '':
         return "Empty file name", 400
 
-    result = forecast_from_uploaded_file(file)  # your logic function
-    return jsonify(result)
+    try:
+        df = pd.read_csv(file)
+
+        # You might want to get method and period from form data or set defaults
+        method = request.form.get('method', 'sma')  # default to sma
+        period = int(request.form.get('period', 3))  # default to 3
+
+        result = run_forecast(df, method, period)
+        return jsonify(result)
+
+    except Exception as e:
+        return f"An error occurred: {str(e)}", 500
 
 if __name__ == '__main__':
     app.run(debug=True)
