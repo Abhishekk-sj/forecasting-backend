@@ -1,44 +1,171 @@
-from flask import Flask, request, render_template, jsonify
-from forecast_logic import run_forecast
-import pandas as pd
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AI Forecasting Tool</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <style>
+    body {
+      background: linear-gradient(to right, #0f2027, #203a43, #2c5364);
+      color: white;
+      font-family: 'Segoe UI', sans-serif;
+    }
+    .container {
+      max-width: 800px;
+      margin-top: 50px;
+    }
+    .card {
+      background-color: #1e2a38;
+      border: none;
+      border-radius: 15px;
+      padding: 20px;
+      box-shadow: 0 0 20px rgba(0, 255, 255, 0.1);
+    }
+    .btn-primary {
+      background-color: #00bcd4;
+      border: none;
+    }
+    .btn-primary:hover {
+      background-color: #0097a7;
+    }
+    .form-label, .form-control, select {
+      color: white;
+    }
+    .form-control, select {
+      background-color: #2c3e50;
+      border: 1px solid #00bcd4;
+    }
+    .form-control::file-selector-button {
+      background-color: #00bcd4;
+      color: white;
+      border: none;
+    }
+    .loading {
+      display: none;
+      font-size: 18px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <h2 class="mb-4 text-center">AI Forecasting Tool 🔮</h2>
 
-app = Flask(__name__)
+      <form id="upload-form">
+        <div class="mb-3">
+          <label for="csvFile" class="form-label">Upload CSV File</label>
+          <input type="file" class="form-control" id="csvFile" name="file" required />
+        </div>
 
-@app.route('/')
-def index():
-    return render_template('index.html')
+        <div id="column-selectors" class="row mb-3" style="display:none;">
+          <div class="col">
+            <label for="dateCol" class="form-label">Select Date Column</label>
+            <select id="dateCol" name="date_col" class="form-select" required></select>
+          </div>
+          <div class="col">
+            <label for="valueCol" class="form-label">Select Value Column</label>
+            <select id="valueCol" name="value_col" class="form-select" required></select>
+          </div>
+        </div>
 
-@app.route('/forecast', methods=['POST'])
-def forecast():
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file uploaded'}), 400
+        <div class="row mb-3">
+          <div class="col">
+            <label for="method" class="form-label">Select Forecast Method</label>
+            <select id="method" name="method" class="form-select">
+              <option value="sma">Simple Moving Average (SMA)</option>
+              <option value="wma">Weighted Moving Average (WMA)</option>
+            </select>
+          </div>
+          <div class="col">
+            <label for="period" class="form-label">Forecast Period</label>
+            <input type="number" class="form-control" id="period" name="period" value="3" min="1" required />
+          </div>
+        </div>
 
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({'error': 'Empty file name'}), 400
+        <button type="submit" class="btn btn-primary w-100">Generate Forecast</button>
+        <div class="text-center mt-3 loading" id="loading">⏳ Forecasting... Please wait...</div>
+      </form>
 
-    try:
-        # Get parameters from the frontend
-        date_col = request.form.get('date_col')
-        value_col = request.form.get('value_col')
-        method = request.form.get('method')
-        period = int(request.form.get('period'))
+      <hr />
+      <div id="resultArea" style="display: none;">
+        <h5>📈 Forecast Result:</h5>
+        <ul id="forecastResult" class="list-group list-group-flush"></ul>
+      </div>
 
-        # Load and prepare the dataframe
-        df = pd.read_csv(file)
+      <div id="errorArea" class="mt-3 text-danger"></div>
+    </div>
+  </div>
 
-        if date_col not in df.columns or value_col not in df.columns:
-            return jsonify({'error': 'Selected columns not found in the uploaded file'}), 400
+  <script>
+    const form = document.getElementById('upload-form');
+    const csvInput = document.getElementById('csvFile');
+    const dateColSelect = document.getElementById('dateCol');
+    const valueColSelect = document.getElementById('valueCol');
+    const selectorsDiv = document.getElementById('column-selectors');
+    const resultArea = document.getElementById('resultArea');
+    const forecastList = document.getElementById('forecastResult');
+    const errorArea = document.getElementById('errorArea');
+    const loading = document.getElementById('loading');
 
-        df = df[[date_col, value_col]]
-        df.columns = ['Date', 'Value']
+    // Step 1: Detect columns after CSV upload
+    csvInput.addEventListener('change', async () => {
+      const file = csvInput.files[0];
+      if (!file) return;
 
-        # Run forecasting logic
-        result = run_forecast(df, method=method, period=period)
-        return jsonify({'forecast': result})
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        const text = e.target.result;
+        const firstLine = text.split('\n')[0];
+        const headers = firstLine.split(',');
 
-    except Exception as e:
-        return jsonify({'error': f'An error occurred: {str(e)}'}), 500
+        dateColSelect.innerHTML = '';
+        valueColSelect.innerHTML = '';
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=10000)
+        headers.forEach(h => {
+          const option = `<option value="${h.trim()}">${h.trim()}</option>`;
+          dateColSelect.innerHTML += option;
+          valueColSelect.innerHTML += option;
+        });
+
+        selectorsDiv.style.display = 'flex';
+      };
+      reader.readAsText(file);
+    });
+
+    // Step 2: Handle form submission
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      loading.style.display = 'block';
+      resultArea.style.display = 'none';
+      errorArea.innerText = '';
+      forecastList.innerHTML = '';
+
+      const formData = new FormData(form);
+      try {
+        const response = await fetch('/forecast', {
+          method: 'POST',
+          body: formData
+        });
+        const data = await response.json();
+        loading.style.display = 'none';
+
+        if (data.error) {
+          errorArea.innerText = data.error;
+        } else {
+          resultArea.style.display = 'block';
+          data.forecast.forEach(row => {
+            const li = document.createElement('li');
+            li.classList.add('list-group-item', 'bg-dark', 'text-light');
+            li.innerText = `📅 ${row.Date}: ${row.Forecast.toFixed(2)}`;
+            forecastList.appendChild(li);
+          });
+        }
+      } catch (err) {
+        loading.style.display = 'none';
+        errorArea.innerText = 'Error fetching forecast.';
+      }
+    });
+  </script>
+</body>
+</html>
