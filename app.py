@@ -1,6 +1,8 @@
+# Inside app.py
+
 from flask import Flask, request, render_template, jsonify
-from forecast_logic import run_forecast
 import pandas as pd
+from forecast_logic import run_forecast
 
 app = Flask(__name__)
 
@@ -18,23 +20,22 @@ def forecast():
         return jsonify({'error': 'Empty file name'}), 400
 
     try:
-        # Get parameters from the frontend
+        # Get parameters from the form
         date_col = request.form.get('date_col')
         value_col = request.form.get('value_col')
+        frequency = request.form.get('frequency')  # Weekly, Monthly, etc.
         method = request.form.get('method')
         period = int(request.form.get('period'))
 
-        # Load and prepare the dataframe
+        # Read CSV file
         df = pd.read_csv(file)
 
-        if date_col not in df.columns or value_col not in df.columns:
-            return jsonify({'error': 'Selected columns not found in the uploaded file'}), 400
-
+        # Rename the selected columns
         df = df[[date_col, value_col]]
         df.columns = ['Date', 'Value']
 
-        # Run forecasting logic
-        result = run_forecast(df, method=method, period=period)
+        # Generate the forecast
+        result = run_forecast(df, method=method, period=period, frequency=frequency)
         return jsonify({'forecast': result})
 
     except Exception as e:
