@@ -34,7 +34,8 @@ def forecast():
         df.columns = ['Date', 'Value']
 
         # Run forecasting logic
-        result = run_forecast(df, method=method, period=period)
+        freq = request.form.get('freq')  # Add this line
+        result = run_forecast(df, method=method, period=period, freq=freq)
         return jsonify({'forecast': result})
 
     except Exception as e:
